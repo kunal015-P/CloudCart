@@ -1,0 +1,58 @@
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo 'Checking out CloudCart source code'
+                checkout scm
+            }
+        }
+
+        stage('Validate Docker Compose') {
+            steps {
+                dir('cloudcart-app') {
+                    sh 'docker compose config --quiet'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                dir('cloudcart-app') {
+                    sh '''
+                        set -e
+
+                        for service in user-service product-service cart-service order-service ai-service frontend
+                        do
+                            echo "Building Docker image: $service"
+                            docker compose build "$service"
+                        done
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'CloudCart CI Pipeline completed successfully!'
+        }
+
+        failure {
+            echo 'CloudCart CI Pipeline failed. Check the console output.'
+        }
+
+        always {
+            echo 'CloudCart pipeline execution finished.'
+        }
+    }
+}
