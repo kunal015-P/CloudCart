@@ -14,6 +14,25 @@ import {
   clearSession
 } from "./api.js";
 
+function createCheckoutId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  // Fallback for HTTP deployments without crypto.randomUUID()
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+    /[xy]/g,
+    (character) => {
+      const random = Math.floor(Math.random() * 16);
+
+      const value =
+        character === "x" ? random : (random & 0x3) | 0x8;
+
+      return value.toString(16);
+    }
+  );
+}
+
 const CATEGORIES = [
   "Gaming Accessories",
   "Goggles",
@@ -245,7 +264,7 @@ function App() {
     setError("");
 
     try {
-      const checkoutId = crypto.randomUUID();
+      const checkoutId = createCheckoutId();
 
       const result = await api.checkout(checkoutId);
 
