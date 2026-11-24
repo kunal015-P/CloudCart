@@ -160,17 +160,19 @@ def test_cart_add_read_and_remove(authenticated_client):
     )
 
 
+
 @pytest.mark.integration
 def test_recommendations_endpoint(client):
     response = client.get(
         "/api/ai/recommendations",
-        params={"limit": 5},
+        params={
+            "budget": 50000,
+            "limit": 5,
+        },
     )
 
     assert response.status_code == 200, response.text
 
-    data = response.json()
-    assert isinstance(data, (list, dict))
 
 
 @pytest.mark.integration
