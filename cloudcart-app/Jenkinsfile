@@ -9,38 +9,42 @@ pipeline {
     }
 
     environment {
+        // CI-only values for Docker Compose interpolation
         POSTGRES_DB = 'cloudcart_ci'
         POSTGRES_USER = 'cloudcart_ci'
         POSTGRES_PASSWORD = 'ci-placeholder-password'
-        DATABASE_URL = 'postgresql+psycopg://cloudcart_ci:ci-placeholder-password@postgres:5432/cloudcart_ci'
+
+        DATABASE_URL = 'postgresql://cloudcart_ci:ci-placeholder-password@postgres:5432/cloudcart_ci'
 
         REDIS_URL = 'redis://redis:6379/0'
-        JWT_SECRET = 'ci-placeholder-secret-not-for-deployment'
-        JWT_ALGORITHM = 'HS256'
-        JWT_EXPIRE_MINUTES = '60'
 
-        PRODUCT_SERVICE_URL = 'http://product-service:8002'
+        JWT_SECRET = 'cloudcart-ci-placeholder-secret'
+
         USER_SERVICE_URL = 'http://user-service:8001'
+        PRODUCT_SERVICE_URL = 'http://product-service:8002'
         CART_SERVICE_URL = 'http://cart-service:8003'
         ORDER_SERVICE_URL = 'http://order-service:8004'
         AI_SERVICE_URL = 'http://ai-service:8005'
 
-        CORS_ORIGINS = 'http://localhost:3000'
+        CORS_ORIGINS = 'http://localhost:80'
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo 'Checking out CloudCart source code'
                 checkout scm
+                echo 'CloudCart source code checked out successfully.'
             }
         }
 
         stage('Validate Docker Compose') {
             steps {
                 dir('cloudcart-app') {
-                    sh 'docker compose config --quiet'
+                    sh '''
+                        echo "Validating Docker Compose configuration..."
+                        docker compose config --quiet
+                    '''
                 }
             }
         }
@@ -49,13 +53,8 @@ pipeline {
             steps {
                 dir('cloudcart-app') {
                     sh '''
-                        set -e
-
-                        for service in user-service product-service cart-service order-service ai-service frontend
-                        do
-                            echo "Building Docker image: $service"
-                            docker compose build "$service"
-                        done
+                        echo "Building CloudCart Docker images..."
+                        docker compose build
                     '''
                 }
             }
@@ -64,18 +63,13 @@ pipeline {
         stage('Verify Running Application') {
             steps {
                 sh '''
-                    echo "Checking CloudCart Product API..."
+                    echo "Checking CloudCart application health..."
 
-                    curl --fail \
-                         --silent \
-                         --show-error \
-                         --retry 10 \
-                         --retry-connrefused \
-                         --retry-delay 3 \
-                         --max-time 5 \
-                         http://127.0.0.1/api/products/health
+                    curl --fail --silent --show-error \
+                        http://127.0.0.1/api/products/health
 
-                    echo "CloudCart is reachable!"
+                    echo ""
+                    echo "CloudCart application is healthy."
                 '''
             }
         }
@@ -84,13 +78,14 @@ pipeline {
             steps {
                 dir('cloudcart-app') {
                     sh '''
-                        set -e
+                        echo "Setting up Python test environment..."
 
                         python3 -m venv .venv-ci
 
-                        .venv-ci/bin/python -m pip install \
-                            --disable-pip-version-check \
+                        .venv-ci/bin/pip install \
                             -r tests/requirements-test.txt
+
+                        mkdir -p reports
                     '''
                 }
             }
@@ -100,15 +95,13 @@ pipeline {
             steps {
                 dir('cloudcart-app') {
                     sh '''
-                        set -e
+                        echo "Running CloudCart integration tests..."
 
-                        mkdir -p reports
-
-                        .venv-ci/bin/python -m pytest \
+                        .venv-ci/bin/pytest \
                             -c tests/pytest.ini \
                             -m integration \
                             tests/ \
-                            --junitxml=reports/integration.xml
+                            --junitxml=reports/integration-tests.xml
                     '''
                 }
             }
@@ -118,15 +111,13 @@ pipeline {
             steps {
                 dir('cloudcart-app') {
                     sh '''
-                        set -e
+                        echo "Running CloudCart end-to-end tests..."
 
-                        mkdir -p reports
-
-                        .venv-ci/bin/python -m pytest \
+                        .venv-ci/bin/pytest \
                             -c tests/pytest.ini \
                             -m e2e \
                             tests/ \
-                            --junitxml=reports/e2e.xml
+                            --junitxml=reports/e2e-tests.xml
                     '''
                 }
             }
@@ -147,24 +138,60 @@ pipeline {
                 }
             }
         }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qualityGate = waitForQualityGate()
+
+                        echo "SonarQube Quality Gate Status: ${qualityGate.status}"
+
+                        if (qualityGate.status != 'OK') {
+                            error """
+                                CloudCart pipeline failed!
+                                SonarQube Quality Gate status:
+                                ${qualityGate.status}
+                            """
+                        }
+
+                        echo 'SonarQube Quality Gate passed successfully!'
+                    }
+                }
+            }
+        }
     }
 
     post {
         always {
-            junit(
-                testResults: 'cloudcart-app/reports/*.xml',
-                allowEmptyResults: true
-            )
+            echo 'Publishing test reports...'
 
-            echo 'CloudCart CI pipeline execution finished.'
+            junit(
+                allowEmptyResults: true,
+                testResults: 'cloudcart-app/reports/*.xml'
+            )
         }
 
         success {
-            echo 'All CloudCart CI stages completed successfully!'
+            echo '''
+                =========================================
+                CLOUDCART PIPELINE SUCCESSFUL!
+                Docker build: PASSED
+                Integration tests: PASSED
+                E2E tests: PASSED
+                SonarQube analysis: COMPLETED
+                Quality Gate: PASSED
+                =========================================
+            '''
         }
 
         failure {
-            echo 'CloudCart CI failed. Check the console output.'
+            echo '''
+                =========================================
+                CLOUDCART PIPELINE FAILED!
+                Check Jenkins Console Output.
+                =========================================
+            '''
         }
     }
 }
