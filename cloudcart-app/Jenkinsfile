@@ -235,16 +235,14 @@ stage('SonarQube Analysis') {
 
 stage('SonarQube Analysis') {
     steps {
-        dir('cloudcart-app') {
-            script {
-                def scannerHome = tool 'SonarScanner'
+        script {
+            def scannerHome = tool 'SonarScanner'
 
-
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh """
-                        ${scannerHome}/bin/sonar-scanner
-                    """
-                }
+            withSonarQubeEnv('SonarQube-Server') {
+                sh """
+                    ${scannerHome}/bin/sonar-scanner \
+                    -Dsonar.projectBaseDir=cloudcart-app
+                """
             }
         }
     }
