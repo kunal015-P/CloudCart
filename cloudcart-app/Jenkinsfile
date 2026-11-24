@@ -135,6 +135,121 @@ pipeline {
         }
     }
 
+        
+stage('SonarQube Analysis') {
+    steps {
+        dir('cloudcart-app') {
+            script {
+                def scannerHome = tool 'SonarScanner'
+
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner
+                    """
+                }
+            }
+        }
+    }
+}
+
+stage('SonarQube Analysis') {
+    steps {
+        dir('cloudcart-app') {
+            script {
+                def scannerHome = tool 'SonarScanner'
+
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner
+                    """
+                }
+            }
+        }
+    }
+}
+
+stage('SonarQube Analysis') {
+    steps {
+        dir('cloudcart-app') {
+            script {
+                def scannerHome = tool 'SonarScanner'
+
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner
+                    """
+                }
+            }
+        }
+    }
+}
+
+stage('SonarQube Analysis') {
+    steps {
+        dir('cloudcart-app') {
+            script {
+                def scannerHome = tool 'SonarScanner'
+
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner
+                    """
+                }
+            }
+        }
+    }
+}
+
+
+stage('SonarQube Analysis') {
+    steps {
+        dir('cloudcart-app') {
+            script {
+                def scannerHome = tool 'SonarScanner'
+
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner
+                    """
+                }
+            }
+        }
+    }
+}
+
+stage('SonarQube Analysis') {
+    steps {
+        dir('cloudcart-app') {
+            script {
+                def scannerHome = tool 'SonarScanner'
+
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner
+                    """
+                }
+            }
+        }
+    }
+}
+
+stage(SonarQube Analysis') {
+    steps {
+        dir('cloudcart-app') {
+            script {
+                def scannerHome = tool 'SonarScanner'
+
+
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner
+                    """
+                }
+            }
+        }
+    }
+}
+
     post {
         always {
             junit(
