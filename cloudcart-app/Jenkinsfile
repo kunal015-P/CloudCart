@@ -8,8 +8,6 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES')
     }
 
-    // These are dummy CI values for Compose validation/build only.
-    // They are NOT production credentials.
     environment {
         POSTGRES_DB = 'cloudcart_ci'
         POSTGRES_USER = 'cloudcart_ci'
@@ -133,120 +131,23 @@ pipeline {
                 }
             }
         }
-    }
 
-        
-stage('SonarQube Analysis') {
-    steps {
-        dir('cloudcart-app') {
-            script {
-                def scannerHome = tool 'SonarScanner'
+        stage('SonarQube Analysis') {
+            steps {
+                dir('cloudcart-app') {
+                    script {
+                        def scannerHome = tool 'SonarScanner'
 
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh """
-                        ${scannerHome}/bin/sonar-scanner
-                    """
+                        withSonarQubeEnv('SonarQube-Server') {
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner
+                            """
+                        }
+                    }
                 }
             }
         }
     }
-}
-
-stage('SonarQube Analysis') {
-    steps {
-        dir('cloudcart-app') {
-            script {
-                def scannerHome = tool 'SonarScanner'
-
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh """
-                        ${scannerHome}/bin/sonar-scanner
-                    """
-                }
-            }
-        }
-    }
-}
-
-stage('SonarQube Analysis') {
-    steps {
-        dir('cloudcart-app') {
-            script {
-                def scannerHome = tool 'SonarScanner'
-
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh """
-                        ${scannerHome}/bin/sonar-scanner
-                    """
-                }
-            }
-        }
-    }
-}
-
-stage('SonarQube Analysis') {
-    steps {
-        dir('cloudcart-app') {
-            script {
-                def scannerHome = tool 'SonarScanner'
-
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh """
-                        ${scannerHome}/bin/sonar-scanner
-                    """
-                }
-            }
-        }
-    }
-}
-
-
-stage('SonarQube Analysis') {
-    steps {
-        dir('cloudcart-app') {
-            script {
-                def scannerHome = tool 'SonarScanner'
-
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh """
-                        ${scannerHome}/bin/sonar-scanner
-                    """
-                }
-            }
-        }
-    }
-}
-
-stage('SonarQube Analysis') {
-    steps {
-        dir('cloudcart-app') {
-            script {
-                def scannerHome = tool 'SonarScanner'
-
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh """
-                        ${scannerHome}/bin/sonar-scanner
-                    """
-                }
-            }
-        }
-    }
-}
-
-stage('SonarQube Analysis') {
-    steps {
-        script {
-            def scannerHome = tool 'SonarScanner'
-
-            withSonarQubeEnv('SonarQube-Server') {
-                sh """
-                    ${scannerHome}/bin/sonar-scanner \
-                    -Dsonar.projectBaseDir=cloudcart-app
-                """
-            }
-        }
-    }
-}
 
     post {
         always {
