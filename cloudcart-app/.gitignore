@@ -22,3 +22,5 @@ coverage/
 .coverage
 htmlcov/
 coverage/
+secrets.yaml
+*.secret.yaml
