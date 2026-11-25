@@ -5,7 +5,7 @@ metadata:
   name: postgres
   namespace: cloudcart
 spec:
-  type: ClusterIP
+  clusterIP: None
   selector:
     app: postgres
   ports:

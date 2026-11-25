@@ -7,7 +7,6 @@ metadata:
 data:
   POSTGRES_DB: "cloudcart"
   POSTGRES_USER: "cloudcart"
-  POSTGRES_PASSWORD: "cloudcart"
   JWT_ALGORITHM: "HS256"
   JWT_EXPIRE_MINUTES: "60"
 
@@ -17,4 +16,3 @@ data:
   ORDER_SERVICE_URL: "http://order-service:8004"
   AI_SERVICE_URL: "http://ai-service:8005"
 
-  CORS_ORIGINS: "http://localhost:3000"
