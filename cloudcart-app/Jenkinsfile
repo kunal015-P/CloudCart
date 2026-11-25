@@ -17,8 +17,7 @@ pipeline {
     }
 
     environment {
-        // CI-only values used for build and test configuration.
-        // These must NOT be used for production deployment.
+        // CI-only values. Never use these for production deployment.
         POSTGRES_DB = 'cloudcart_ci'
         POSTGRES_USER = 'cloudcart_ci'
         POSTGRES_PASSWORD = 'ci-placeholder-password'
@@ -26,6 +25,8 @@ pipeline {
         DATABASE_URL = 'postgresql://cloudcart_ci:ci-placeholder-password@postgres:5432/cloudcart_ci'
         REDIS_URL = 'redis://redis:6379/0'
         JWT_SECRET = 'cloudcart-ci-placeholder-secret'
+        JWT_ALGORITHM = 'HS256'
+        JWT_EXPIRE_MINUTES = '60'
 
         USER_SERVICE_URL = 'http://user-service:8001'
         PRODUCT_SERVICE_URL = 'http://product-service:8002'
@@ -35,11 +36,10 @@ pipeline {
 
         CORS_ORIGINS = 'http://localhost:80'
 
-        AWS_REGION = 'us-east-2'
-        ECR_REGISTRY = '924408031764.dkr.ecr.us-east-2.amazonaws.com'
-
+        // Docker Hub configuration
         DOCKERHUB_NAMESPACE = 'kunal161'
 
+        // Existing application directory on Jenkins EC2
         DEPLOY_DIR = '/home/ec2-user/CloudCart/cloudcart-app'
     }
 
@@ -69,6 +69,8 @@ pipeline {
                     echo "Validating Docker Compose configuration..."
 
                     docker compose config --quiet
+
+                    echo "Docker Compose configuration is valid."
                     '''
                 }
             }
@@ -80,11 +82,13 @@ pipeline {
                     sh '''#!/usr/bin/env bash
                     set -euo pipefail
 
-                    echo "Building CloudCart application images..."
+                    echo "Building six CloudCart application images..."
 
-                    docker compose build
+                    # Compose image names use IMAGE_TAG.
+                    # Build directly with this Git commit's tag.
+                    IMAGE_TAG="$GIT_SHA" docker compose build
 
-                    echo "All application images built successfully."
+                    echo "All six application images built successfully."
                     '''
                 }
             }
@@ -136,6 +140,8 @@ pipeline {
                         -m integration \
                         tests/ \
                         --junitxml=reports/integration-tests.xml
+
+                    echo "Integration tests passed."
                     '''
                 }
             }
@@ -160,6 +166,8 @@ pipeline {
                         -m e2e \
                         tests/ \
                         --junitxml=reports/e2e-tests.xml
+
+                    echo "E2E tests passed."
                     '''
                 }
             }
@@ -193,77 +201,13 @@ pipeline {
                             error "SonarQube Quality Gate failed: ${qualityGate.status}"
                         }
 
-                        echo 'Quality Gate passed!'
+                        echo 'SonarQube Quality Gate passed!'
                     }
                 }
             }
         }
 
-        stage('Login to AWS ECR') {
-            steps {
-                sh '''
-                    #!/usr/bin/env bash
-                    set -euo pipefail
-
-                    echo "Authenticating Jenkins with AWS ECR using its EC2 IAM role..."
-
-                    env \
-                        -u AWS_ACCESS_KEY_ID \
-                        -u AWS_SECRET_ACCESS_KEY \
-                        -u AWS_SESSION_TOKEN \
-                        -u AWS_PROFILE \
-                        AWS_SHARED_CREDENTIALS_FILE=/dev/null \
-                        AWS_CONFIG_FILE=/dev/null \
-                        aws ecr get-login-password \
-                            --region "$AWS_REGION" \
-                    | docker login \
-                        --username AWS \
-                        --password-stdin "$ECR_REGISTRY"
-
-                    echo "ECR login successful."
-                '''
-            }
-        }
-
-        stage('Push Images to ECR') {
-            steps {
-                sh '''#!/usr/bin/env bash
-                set -euo pipefail
-
-                echo "Pushing CloudCart images for commit: $GIT_SHA"
-
-                services=(
-                    user-service
-                    product-service
-                    cart-service
-                    order-service
-                    ai-service
-                    frontend
-                )
-
-                for service in "${services[@]}"; do
-                    repository="$ECR_REGISTRY/cloudcart-$service"
-
-                    echo "Publishing $service to ECR..."
-
-                    docker image inspect "$repository:latest" >/dev/null
-
-                    docker tag \
-                        "$repository:latest" \
-                        "$repository:$GIT_SHA"
-
-                    docker push "$repository:$GIT_SHA"
-                done
-
-                echo "All six commit-tagged images pushed to ECR."
-
-                docker logout "$ECR_REGISTRY" || true
-                '''
-            }
-        }
-
-        // NEW: Publish the same six locally built images to Docker Hub.
-        stage('Push Images to Docker Hub') {
+        stage('Login and Push Images to Docker Hub') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -276,18 +220,20 @@ pipeline {
                     set -euo pipefail
                     set +x
 
-                    echo "Authenticating with Docker Hub..."
+                    echo "Checking Docker Hub credentials..."
 
                     if [[ "$DOCKERHUB_USERNAME" != "$DOCKERHUB_NAMESPACE" ]]; then
                         echo "ERROR: Docker Hub credential username does not match the configured namespace."
                         exit 1
                     fi
 
+                    echo "Logging in to Docker Hub..."
+
                     echo "$DOCKERHUB_TOKEN" | docker login \
                         --username "$DOCKERHUB_USERNAME" \
                         --password-stdin
 
-                    # Log out even if an image push fails.
+                    # Always log out, including if a push fails.
                     trap 'docker logout >/dev/null 2>&1 || true' EXIT
 
                     services=(
@@ -299,225 +245,37 @@ pipeline {
                         frontend
                     )
 
-                    echo "Publishing CloudCart images for commit: $GIT_SHA"
+                    echo "Publishing CloudCart commit: $GIT_SHA"
 
                     for service in "${services[@]}"; do
-                        source_image="$ECR_REGISTRY/cloudcart-$service:latest"
-                        target_image="$DOCKERHUB_NAMESPACE/cloudcart-$service"
 
-                        echo "Publishing $service to Docker Hub..."
+                        repository="$DOCKERHUB_NAMESPACE/cloudcart-$service"
 
-                        # Use the image already built by Docker Compose.
-                        docker image inspect "$source_image" >/dev/null
+                        commit_image="$repository:$GIT_SHA"
+                        latest_image="$repository:latest"
 
-                        # Tag for this exact Git commit.
-                        docker tag \
-                            "$source_image" \
-                            "$target_image:$GIT_SHA"
+                        echo "----------------------------------------"
+                        echo "Publishing $service"
+                        echo "Repository: $repository"
+                        echo "----------------------------------------"
 
-                        # Tag as latest.
-                        docker tag \
-                            "$source_image" \
-                            "$target_image:latest"
+                        # Confirm the locally built commit image exists.
+                        docker image inspect "$commit_image" >/dev/null
 
-                        # Push both tags.
-                        docker push "$target_image:$GIT_SHA"
-                        docker push "$target_image:latest"
+                        # Push the immutable commit-specific image.
+                        docker push "$commit_image"
 
-                        echo "Successfully published $target_image"
+                        # Create and publish the latest tag.
+                        docker tag "$commit_image" "$latest_image"
+
+                        docker push "$latest_image"
+
+                        echo "Successfully published $repository"
                     done
 
-                    echo "All six CloudCart images published to Docker Hub."
+                    echo "All six CloudCart images published successfully."
                     '''
                 }
-            }
-        }
-
-        stage('Approve Production Deployment') {
-            steps {
-                timeout(time: 30, unit: 'MINUTES') {
-                    input(
-                        message: "Deploy CloudCart commit ${env.GIT_SHA} to production?",
-                        ok: 'Approve Deployment'
-                    )
-                }
-            }
-        }
-
-        stage('Deploy to EC2') {
-            steps {
-                sh '''#!/usr/bin/env bash
-                set -euo pipefail
-
-                echo "Deploying CloudCart commit: $GIT_SHA"
-
-                # Authenticate again before pulling from ECR.
-                env \
-                    -u AWS_ACCESS_KEY_ID \
-                    -u AWS_SECRET_ACCESS_KEY \
-                    -u AWS_SESSION_TOKEN \
-                    -u AWS_PROFILE \
-                    AWS_SHARED_CREDENTIALS_FILE=/dev/null \
-                    AWS_CONFIG_FILE=/dev/null \
-                    aws ecr get-login-password \
-                        --region "$AWS_REGION" \
-                | docker login \
-                    --username AWS \
-                    --password-stdin "$ECR_REGISTRY"
-
-                # Remove CI-only variables so Compose reads production
-                # configuration from the deployment .env file.
-                unset_ci_vars=(
-                    -u POSTGRES_DB
-                    -u POSTGRES_USER
-                    -u POSTGRES_PASSWORD
-                    -u DATABASE_URL
-                    -u REDIS_URL
-                    -u JWT_SECRET
-                    -u USER_SERVICE_URL
-                    -u PRODUCT_SERVICE_URL
-                    -u CART_SERVICE_URL
-                    -u ORDER_SERVICE_URL
-                    -u AI_SERVICE_URL
-                    -u CORS_ORIGINS
-                )
-
-                echo "Pulling the approved commit-tagged images..."
-
-                env "${unset_ci_vars[@]}" \
-                    IMAGE_TAG="$GIT_SHA" \
-                    docker compose \
-                        --project-directory "$DEPLOY_DIR" \
-                        --env-file "$DEPLOY_DIR/.env" \
-                        -f "$DEPLOY_DIR/docker-compose.yml" \
-                        pull \
-                        user-service \
-                        product-service \
-                        cart-service \
-                        order-service \
-                        ai-service \
-                        frontend
-
-                echo "Updating application containers..."
-
-                env "${unset_ci_vars[@]}" \
-                    IMAGE_TAG="$GIT_SHA" \
-                    docker compose \
-                        --project-directory "$DEPLOY_DIR" \
-                        --env-file "$DEPLOY_DIR/.env" \
-                        -f "$DEPLOY_DIR/docker-compose.yml" \
-                        up -d \
-                        --no-build \
-                        --pull never \
-                        user-service \
-                        product-service \
-                        cart-service \
-                        order-service \
-                        ai-service \
-                        frontend
-
-                docker logout "$ECR_REGISTRY" || true
-
-                echo "Waiting for all six application containers to become healthy..."
-
-                services=(
-                    user-service
-                    product-service
-                    cart-service
-                    order-service
-                    ai-service
-                    frontend
-                )
-
-                all_healthy=false
-
-                for attempt in $(seq 1 60); do
-                    all_healthy=true
-
-                    for service in "${services[@]}"; do
-                        status=$(docker inspect \
-                            --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
-                            "cloudcart-$service" 2>/dev/null || true)
-
-                        if [[ "$status" != "healthy" ]]; then
-                            all_healthy=false
-                            echo "$service status: ${status:-not found}"
-                        fi
-                    done
-
-                    if [[ "$all_healthy" == true ]]; then
-                        break
-                    fi
-
-                    sleep 3
-                done
-
-                if [[ "$all_healthy" != true ]]; then
-                    echo "Deployment health verification failed."
-
-                    docker compose \
-                        --project-directory "$DEPLOY_DIR" \
-                        --env-file "$DEPLOY_DIR/.env" \
-                        -f "$DEPLOY_DIR/docker-compose.yml" \
-                        ps
-
-                    exit 1
-                fi
-
-                echo "Checking application API health..."
-
-                curl --fail --silent --show-error \
-                    http://127.0.0.1/api/products/health
-
-                echo ""
-                echo "CloudCart deployment health checks passed."
-                '''
-            }
-        }
-
-        stage('Promote Latest ECR Tags') {
-            steps {
-                sh '''#!/usr/bin/env bash
-                set -euo pipefail
-
-                echo "Promoting successfully deployed images to latest..."
-
-                env \
-                    -u AWS_ACCESS_KEY_ID \
-                    -u AWS_SECRET_ACCESS_KEY \
-                    -u AWS_SESSION_TOKEN \
-                    -u AWS_PROFILE \
-                    AWS_SHARED_CREDENTIALS_FILE=/dev/null \
-                    AWS_CONFIG_FILE=/dev/null \
-                    aws ecr get-login-password \
-                        --region "$AWS_REGION" \
-                | docker login \
-                    --username AWS \
-                    --password-stdin "$ECR_REGISTRY"
-
-                services=(
-                    user-service
-                    product-service
-                    cart-service
-                    order-service
-                    ai-service
-                    frontend
-                )
-
-                for service in "${services[@]}"; do
-                    repository="$ECR_REGISTRY/cloudcart-$service"
-
-                    docker tag \
-                        "$repository:$GIT_SHA" \
-                        "$repository:latest"
-
-                    docker push "$repository:latest"
-                done
-
-                docker logout "$ECR_REGISTRY" || true
-
-                echo "All latest ECR tags now point to the deployed commit."
-                '''
             }
         }
     }
@@ -535,12 +293,13 @@ pipeline {
         success {
             echo """
                 =========================================
-                CLOUDCART PIPELINE SUCCESSFUL!
+                CLOUDCART CI PIPELINE SUCCESSFUL!
                 =========================================
 
                 Git Commit: ${env.GIT_SHA}
 
-                Docker Hub Images:
+                Published Docker Hub images:
+
                 ${env.DOCKERHUB_NAMESPACE}/cloudcart-user-service:${env.GIT_SHA}
                 ${env.DOCKERHUB_NAMESPACE}/cloudcart-product-service:${env.GIT_SHA}
                 ${env.DOCKERHUB_NAMESPACE}/cloudcart-cart-service:${env.GIT_SHA}
@@ -548,7 +307,10 @@ pipeline {
                 ${env.DOCKERHUB_NAMESPACE}/cloudcart-ai-service:${env.GIT_SHA}
                 ${env.DOCKERHUB_NAMESPACE}/cloudcart-frontend:${env.GIT_SHA}
 
-                ECR deployment and health checks completed.
+                All six latest tags have also been updated.
+
+                No EC2 deployment was performed.
+                No AWS ECR operations were performed.
 
                 =========================================
             """
@@ -557,7 +319,7 @@ pipeline {
         failure {
             echo """
                 =========================================
-                CLOUDCART PIPELINE FAILED!
+                CLOUDCART CI PIPELINE FAILED!
                 =========================================
 
                 Git Commit: ${env.GIT_SHA}

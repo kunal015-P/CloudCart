@@ -37,7 +37,7 @@ services:
       retries: 10
 
   user-service:
-    image: 924408031764.dkr.ecr.us-east-2.amazonaws.com/cloudcart-user-service:${IMAGE_TAG:-latest}
+    image: kunal161/cloudcart-user-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/user-service/Dockerfile
@@ -65,7 +65,7 @@ services:
       start_period: 20s
 
   product-service:
-    image: 924408031764.dkr.ecr.us-east-2.amazonaws.com/cloudcart-product-service:${IMAGE_TAG:-latest}
+    image: kunal161/cloudcart-product-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/product-service/Dockerfile
@@ -90,7 +90,7 @@ services:
       start_period: 20s
 
   cart-service:
-    image: 924408031764.dkr.ecr.us-east-2.amazonaws.com/cloudcart-cart-service:${IMAGE_TAG:-latest}
+    image: kunal161/cloudcart-cart-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/cart-service/Dockerfile
@@ -120,7 +120,7 @@ services:
       start_period: 20s
 
   order-service:
-    image: 924408031764.dkr.ecr.us-east-2.amazonaws.com/cloudcart-order-service:${IMAGE_TAG:-latest}
+    image: kunal161/cloudcart-order-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/order-service/Dockerfile
@@ -150,7 +150,7 @@ services:
       start_period: 20s
 
   ai-service:
-    image: 924408031764.dkr.ecr.us-east-2.amazonaws.com/cloudcart-ai-service:${IMAGE_TAG:-latest}
+    image: kunal161/cloudcart-ai-service:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/ai-service/Dockerfile
@@ -175,7 +175,7 @@ services:
       start_period: 20s
 
   frontend:
-    image: 924408031764.dkr.ecr.us-east-2.amazonaws.com/cloudcart-frontend:${IMAGE_TAG:-latest}
+    image: kunal161/cloudcart-frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
